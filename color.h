@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "math_objects.h"
+
 class Color {
 public:
     float r, g, b;
@@ -14,6 +16,13 @@ public:
 
     // Arbitrary Color
     Color(float R, float G, float B) : r(R), g(G), b(B) {}
+
+    // Color based on vector
+    explicit Color(const Math::Vec3& vec) {
+        r = std::clamp(vec.X, 0.0, 1.0);
+        g = std::clamp(vec.Y, 0.0, 1.0);
+        b = std::clamp(vec.Z, 0.0, 1.0);
+    }
 
     // Ouptut a color file
     static void OutputPFM(const std::string& filename,
