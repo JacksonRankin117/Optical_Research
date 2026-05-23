@@ -1,0 +1,3 @@
+/home/jackson-rankin/Developer/Optical_Research/build/CMakeFiles/main.dir
+/home/jackson-rankin/Developer/Optical_Research/build/CMakeFiles/edit_cache.dir
+/home/jackson-rankin/Developer/Optical_Research/build/CMakeFiles/rebuild_cache.dir
