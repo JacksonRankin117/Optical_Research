@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/home/jackson-rankin/Developer/Optical_Research/build",
+  "command": "/usr/bin/c++   -std=gnu++23 -o CMakeFiles/main.dir/main.cpp.o -c /home/jackson-rankin/Developer/Optical_Research/main.cpp",
+  "file": "/home/jackson-rankin/Developer/Optical_Research/main.cpp",
+  "output": "CMakeFiles/main.dir/main.cpp.o"
+}
+]

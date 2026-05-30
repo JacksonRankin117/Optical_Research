@@ -6,14 +6,19 @@ class Ray {
 public:
     Math::Vec3 pos;
     Math::Vec3 dir;
+    double wavelength;  // nm, in [380, 780]
 
-    // Initialize a zero-ray
-    Ray() : pos(), dir() {}
+    Ray() : pos(), dir(), wavelength(550.0) {}
 
-    // Arbitrary ray
-    Ray(Math::Vec3 P, Math::Vec3 D) {
+    Ray(Math::Vec3 P, Math::Vec3 D, double lambda = 550.0) {
         pos = P;
-        dir = D.Normalize();  // Unit vector for direction
+        dir = D.Normalize();
+        wavelength = lambda;
     }
 
+    const Math::Vec3& direction() const { return dir; }
+
+    Math::Vec3 at(double t) const {
+        return pos + dir * t;
+    }
 };

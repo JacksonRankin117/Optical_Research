@@ -22,10 +22,14 @@
 #include <cassert>
 #include <cmath>
 #include <iomanip>
+#include <numbers>
 #include <ostream>
+#include <random>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
+
+
 
 namespace Math {
     struct Vec3 {
@@ -50,9 +54,29 @@ namespace Math {
                 return X*X + Y*Y + Z*Z;
             }
 
+            [[nodiscard]] static Vec3 RandomUnitVector() {
+                static thread_local std::mt19937_64 rng(std::random_device{}());
+                static thread_local std::uniform_real_distribution<double> dist(-1.0, 1.0);
+
+                while (true) {
+                    Vec3 p(dist(rng), dist(rng), dist(rng));
+                    if (p.MagnitudeSquared() < 1.0)
+                        return p.Normalized();
+                }
+            }
+
             [[nodiscard]] constexpr double Magnitude() const noexcept {
                 /// Returns the magnitude of the vector.
+                /// std::sqrt is constexpr in C++23.
                 return std::sqrt(MagnitudeSquared());
+            }
+
+            [[nodiscard]] constexpr bool NearZero() const noexcept {
+                /// std::abs is constexpr in C++23.
+                constexpr double eps = 1e-8;
+                return std::abs(X) < eps &&
+                       std::abs(Y) < eps &&
+                       std::abs(Z) < eps;
             }
 
             constexpr Vec3& Normalize() noexcept {
@@ -72,33 +96,34 @@ namespace Math {
             }
 
             [[nodiscard]] constexpr double operator[](size_t i) const {
-                /// This method will allow the user to access each component by index
-                assert(i < 3);
+                /// This method will allow the user to access each component by index.
+                /// Replaced assert + dead throw with a proper bounds check valid in constexpr.
+                if (i >= 3) throw std::out_of_range("Index out of bounds");
                 return (&X)[i];
-                throw std::out_of_range("Index out of bounds");
             }
 
             [[nodiscard]] constexpr double& operator[](size_t i) {
-                /// This method will allow the user to access and set each component by index
-                assert(i < 3);
+                /// This method will allow the user to access and set each component by index.
+                if (i >= 3) throw std::out_of_range("Index out of bounds");
                 return (&X)[i];
-                throw std::out_of_range("Index out of bounds");
             }
 
             // ------------------------------------------- Angle Conversions -------------------------------------------
             [[nodiscard]] constexpr static double DegToRad(double deg) noexcept {
-                /// This function takes degrees and returns the equivalent in radians
-                return deg * M_PI / 180.0;
+                /// This function takes degrees and returns the equivalent in radians.
+                /// std::numbers::pi replaces non-standard M_PI.
+                return deg * std::numbers::pi / 180.0;
             }
 
             [[nodiscard]] constexpr static double RadToDeg(double rad) noexcept {
                 /// This function takes radians and returns the equivalent in degrees
-                return rad * 180.0 / M_PI;
+                return rad * 180.0 / std::numbers::pi;
             }
 
             // ------------------------------------------- Vector Conversions ------------------------------------------
             [[nodiscard]] constexpr static Vec3 FromCylindrical(double rho, double phi, double z) noexcept {
-                /// This function takes cylindrical values, and returns a new Vec3 in Cartesian coordinates
+                /// This function takes cylindrical values, and returns a new Vec3 in Cartesian coordinates.
+                /// std::cos and std::sin are constexpr in C++23.
 
                 // Calculate the components
                 double x_comp = rho * std::cos(phi);
@@ -109,7 +134,8 @@ namespace Math {
             }
 
             [[nodiscard]] constexpr static Vec3 FromSpherical(double rho, double theta, double phi) noexcept{
-                /// This function takes spherical values, and returns a new Vec3 in Cartesian coordinates
+                /// This function takes spherical values, and returns a new Vec3 in Cartesian coordinates.
+                /// std::sin and std::cos are constexpr in C++23.
 
                 // Calculate the components
                 double x_comp = rho * std::sin(theta) * std::cos(phi);
@@ -121,7 +147,8 @@ namespace Math {
 
             [[nodiscard]] constexpr static std::tuple<double, double, double> ToCylindrical(const Vec3& v) noexcept {
                 /// This function is intended not to produce a vector, as you would not be able to take advantage of any
-                /// of the math here, so instead I designed it to return a tuple
+                /// of the math here, so instead I designed it to return a tuple.
+                /// std::sqrt and std::atan2 are constexpr in C++23.
 
                 // Calculate the components
                 double rho_comp = std::sqrt(v.X * v.X + v.Y * v.Y);
@@ -133,7 +160,8 @@ namespace Math {
 
             [[nodiscard]] constexpr static std::tuple<double, double, double> ToSpherical(const Vec3& v) noexcept {
                 /// This function is intended not to produce a vector, as you would not be able to take advantage of any
-                /// of the math here, so instead I designed it to return a tuple
+                /// of the math here, so instead I designed it to return a tuple.
+                /// std::acos, std::clamp are constexpr in C++23.
 
                 // Calculate the rho squared
                 double rho_comp2 = v.MagnitudeSquared();
@@ -152,7 +180,7 @@ namespace Math {
             // -------------------------------------------- Relational Math --------------------------------------------
             [[nodiscard]] constexpr static double AngleBetween(const Vec3& a, const Vec3& b) {
                 /// This method calculates the angle between any two vectors, and throws an error if either have
-                /// near-zero magnitudes.
+                /// near-zero magnitudes. Throwing inside constexpr is fully valid in C++20+.
 
                 // Check if either magnitudes are too small. Remember that because we are checking MagnitudeSquared, we
                 // must compare it with epsilon*epsilon, or 1e-6.
@@ -302,7 +330,8 @@ namespace Math {
         static constexpr double epsilon = 1e-12;
 
         [[nodiscard]] constexpr double Magnitude() const noexcept {
-            /// Returns the magnitude of the vector.
+            /// Returns the spatial magnitude of the vector (excludes T).
+            /// std::sqrt is constexpr in C++23.
             return std::sqrt(X*X + Y*Y + Z*Z);
         }
 
@@ -314,54 +343,54 @@ namespace Math {
             : T(t), X(x), Y(y), Z(z) {}
 
         [[nodiscard]] constexpr Vec4 Normalized() const noexcept {
-            /// This method will return a new Vec3 object, as opposed to changing the current one
+            /// This method will return a new Vec4 object, as opposed to changing the current one
             double m = Magnitude();
             if (m < epsilon) return {0, 0, 0, 0};  // Avoid floating point errors by returning the zero vector
             return {T / m, X / m, Y / m, Z / m};
         }
+
         // ------------------------------------------------- Indexing --------------------------------------------------
-        constexpr double& operator[](size_t i) noexcept
-        {
-            assert(i < 4);
+        [[nodiscard]] constexpr double& operator[](size_t i) {
+            /// Replaced assert + undefined behavior with a proper bounds check.
+            if (i >= 4) throw std::out_of_range("Index out of bounds");
             return (&T)[i];
         }
 
-        constexpr const double& operator[](size_t i) const noexcept
-        {
-            assert(i < 4);
+        [[nodiscard]] constexpr const double& operator[](size_t i) const {
+            if (i >= 4) throw std::out_of_range("Index out of bounds");
             return (&T)[i];
         }
 
         // ------------------------------------------------- Unary ops -------------------------------------------------
-        constexpr Vec4 operator-() const noexcept
+        [[nodiscard]] constexpr Vec4 operator-() const noexcept
         {
             return {-T, -X, -Y, -Z};
         }
-        // ------------------------------------------------ Arithmetic -------------------------------------------------
 
-        friend constexpr Vec4 operator+(const Vec4& a, const Vec4& b) noexcept
+        // ------------------------------------------------ Arithmetic -------------------------------------------------
+        [[nodiscard]] friend constexpr Vec4 operator+(const Vec4& a, const Vec4& b) noexcept
         {
             return {a.T + b.T, a.X + b.X, a.Y + b.Y, a.Z + b.Z};
         }
 
-        friend constexpr Vec4 operator-(const Vec4& a, const Vec4& b) noexcept
+        [[nodiscard]] friend constexpr Vec4 operator-(const Vec4& a, const Vec4& b) noexcept
         {
             return {a.T - b.T, a.X - b.X, a.Y - b.Y, a.Z - b.Z};
         }
 
-        friend constexpr Vec4 operator*(const Vec4& v, double s) noexcept
+        [[nodiscard]] friend constexpr Vec4 operator*(const Vec4& v, double s) noexcept
         {
             return {v.T * s, v.X * s, v.Y * s, v.Z * s};
         }
 
-        friend constexpr Vec4 operator*(double s, const Vec4& v) noexcept
+        [[nodiscard]] friend constexpr Vec4 operator*(double s, const Vec4& v) noexcept
         {
             return v * s;
         }
 
-        friend constexpr Vec4 operator/(const Vec4& v, double s)
+        [[nodiscard]] friend constexpr Vec4 operator/(const Vec4& v, double s)
         {
-            assert(std::abs(s) > epsilon);
+            if (std::abs(s) < epsilon) throw std::runtime_error("Division by near-zero scalar");
             return v * (1.0 / s);
         }
 
@@ -377,29 +406,27 @@ namespace Math {
             return *this;
         }
 
-        // ------------------------------------------------ Dot Product ------------------------------------------------
-        constexpr double Dot(const Vec4& b) const noexcept { // Returns the spacial dot product
+        // ------------------------------------------------ Dot Products -----------------------------------------------
+        [[nodiscard]] constexpr double Dot(const Vec4& b) const noexcept {
+            /// Returns the spatial dot product (excludes T)
             return X*b.X + Y*b.Y + Z*b.Z;
         }
 
-        constexpr double DotEuclidean(const Vec4& b) const noexcept {
+        [[nodiscard]] constexpr double DotEuclidean(const Vec4& b) const noexcept {
             return T*b.T + X*b.X + Y*b.Y + Z*b.Z;
         }
 
-        constexpr double DotMinkowski(const Vec4& b) const noexcept {
+        [[nodiscard]] constexpr double DotMinkowski(const Vec4& b) const noexcept {
             return -T*b.T + X*b.X + Y*b.Y + Z*b.Z;
         }
 
         // ---------------------------------------------- Spatial helpers ----------------------------------------------
-
-        // Extract spatial part as Vec3 if you want later
-        constexpr auto Spatial() const noexcept
+        [[nodiscard]] constexpr auto Spatial() const noexcept
         {
             return std::tuple{X, Y, Z};
         }
 
         // ----------------------------------------------- Debug print -------------------------------------------------
-
         friend std::ostream& operator<<(std::ostream& os, const Vec4& v)
         {
             return os << "("
@@ -429,7 +456,6 @@ namespace Math {
             Matrix(size_t r, size_t c, double init = 0.0)
                 : rows(r), cols(c), data(r * c, init) {}
 
-
             // 4x4 constructor, initialized with custom values at each index
             Matrix(std::initializer_list<double> vals)
             {
@@ -443,7 +469,7 @@ namespace Math {
 
             // ------------------------------------------- Matrix Properties -------------------------------------------
 
-            double Determinant() const {
+            [[nodiscard]] double Determinant() const {
                 if (rows != cols) throw std::invalid_argument("Matrix must be square.");
 
                 size_t n = rows;
@@ -475,59 +501,60 @@ namespace Math {
                 return det;
             }
 
-            static Matrix Identity(size_t n) {
+            [[nodiscard]] static Matrix Identity(size_t n) {
                 Matrix res(n, n, 0.0);
                 for (size_t i = 0; i < n; ++i) res(i, i) = 1.0;
                 return res;
             }
 
             // Return the number of rows and columns.
-            size_t numRows() const { return rows; }
-            size_t numCols() const { return cols; }
+            [[nodiscard]] size_t numRows() const noexcept { return rows; }
+            [[nodiscard]] size_t numCols() const noexcept { return cols; }
 
             // 2D Accessors mapping to 1D index
-            double& operator()(size_t i, size_t j)
+            [[nodiscard]] double& operator()(size_t i, size_t j)
             {
-                assert(i < rows && j < cols);
+                if (i >= rows || j >= cols) throw std::out_of_range("Matrix index out of bounds");
                 return data[i * cols + j];
             }
 
-            const double& operator()(size_t i, size_t j) const {
+            [[nodiscard]] const double& operator()(size_t i, size_t j) const {
+                if (i >= rows || j >= cols) throw std::out_of_range("Matrix index out of bounds");
                 return data[i * cols + j];
             }
 
             // ------------------------------------------- Matrix Arithmetic -------------------------------------------
 
             // Matrix addition and subtraction
-            friend Matrix operator+(Matrix a, const Matrix& b) {
+            [[nodiscard]] friend Matrix operator+(Matrix a, const Matrix& b) {
                 if (a.rows != b.rows || a.cols != b.cols) throw std::invalid_argument("Size mismatch");
                 for (size_t i = 0; i < a.data.size(); ++i) a.data[i] += b.data[i];
                 return a;
             }
 
-            friend Matrix operator-(Matrix a, const Matrix& b) {
+            [[nodiscard]] friend Matrix operator-(Matrix a, const Matrix& b) {
                 if (a.rows != b.rows || a.cols != b.cols) throw std::invalid_argument("Size mismatch");
                 for (size_t i = 0; i < a.data.size(); ++i) a.data[i] -= b.data[i];
                 return a;
             }
 
             // Scalar multiplication and division
-            friend Matrix operator*(Matrix mat, double scalar) noexcept {
+            [[nodiscard]] friend Matrix operator*(Matrix mat, double scalar) noexcept {
                 for (double& val : mat.data) val *= scalar;
                 return mat;
             }
 
-            friend Matrix operator*(double scalar, Matrix mat) noexcept {
+            [[nodiscard]] friend Matrix operator*(double scalar, Matrix mat) noexcept {
                 return mat * scalar;
             }
 
-            friend Matrix operator/(Matrix mat, double scalar) {
+            [[nodiscard]] friend Matrix operator/(Matrix mat, double scalar) {
                 if (std::abs(scalar) < epsilon) throw std::runtime_error("Division by zero");
                 return mat * (1.0 / scalar);
             }
 
-            // Vector multiplication and matrix multiplication
-            friend Vec4 operator*(const Matrix& M, const Vec4& v) {
+            // Matrix * Vec4
+            [[nodiscard]] friend Vec4 operator*(const Matrix& M, const Vec4& v) {
                 if (M.numRows() != 4 || M.numCols() != 4)
                     throw std::invalid_argument("Matrix must be 4x4");
 
@@ -540,7 +567,7 @@ namespace Math {
             }
 
             // Matrix * Matrix
-            friend Matrix operator*(const Matrix& A, const Matrix& B)
+            [[nodiscard]] friend Matrix operator*(const Matrix& A, const Matrix& B)
             {
                 if (A.cols != B.rows)
                     throw std::invalid_argument("Matrix multiply size mismatch");

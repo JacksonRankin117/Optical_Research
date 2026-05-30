@@ -1,39 +1,38 @@
 #include <vector>
-
+#include <memory>
 #include "camera.h"
-#include "color.h"
-#include "math_objects.h"
+#include "scene.h"
+#include "object.h"
+#include "material.h"
+#include "spd.h"
 
 int main() {
-    // Image storage
-    std::vector<Color> image;
+    // Materials using measured Macbeth SPDs
+    Lambertian groundMat(&SPD::Gray());        // Ideal matte grey
+    Lambertian redMat(&SPD::Red());            // Ideal matte red
+    Lambertian blueMat(&SPD::Blue());    // Ideal matte blue
+    Lambertian greenMat(&SPD::Green());        // Ideal matte green
+    Metallic   metalMat(&SPD::White(), 0.05);  // Polished silver
+    Dielectric glassMat(1.5220, 0.00459);      // Crown glass (1.5220, 0.00459)
 
-    // Camera parameters
-    int width = 1920;
-    int height = 1080;
+    std::vector<std::unique_ptr<Object>> objects;
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.00,  0.0,  0.5),    0.5,   &redMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3(-1.50,  0.0,  0.5),    0.5,   &greenMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 1.50,  0.0,  0.5),    0.5,   &blueMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3(-0.75, -1.0,  0.5),    0.5,   &glassMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.75,  1.0,  0.5),    0.5,   &metalMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.00,  0.0, -1000.0), 1000.0, &groundMat));
 
-    Math::Vec3 position(10, 10, 10);  // Camera position
-    Math::Vec3 target(0, 0, 0);        // Target
-    Math::Vec3 worldUp(0, 0, 1);       // Up is +z
+    Pinhole cam(
+        2160, 1440,
+        Math::Vec3(0, -4,  1),
+        Math::Vec3(0,  0,  0),
+        Math::Vec3(0,  0,  1),
+        40.0,
+        4000            // 16,000 samples needed for production quality, :(
+    );
 
-    double FOV = 60;  // Horizontal FOV, in degrees
-
-    image.resize(width * height);
-
-    Pinhole pinhole = Pinhole(width, height, position, target, worldUp, FOV);
-
-    for (int j = height - 1; j >= 0; j--) {
-        for (int i = width - 1; i >= 0; i--) {
-            Ray currentRay = pinhole.GenerateRay(i, j);
-            image[i + width * j] = Color(
-                0.5 * (currentRay.dir.X + 1),
-                0.5 * (currentRay.dir.Y + 1),
-                0.5 * (currentRay.dir.Z + 1)
-            );
-        }
-    }
-
-    Color::OutputPFM("output.pfm", image, width, height);
-
+    Scene scene(cam, std::move(objects));
+    scene.Render("render.pfm", 20);
     return 0;
 }

@@ -23,6 +23,7 @@ public:
     Math::Vec3 target;    // Camera target
     Math::Vec3 worldUp;   // This is what is considered 'up' in the scene
     double fov;           // Field of view
+    int samples;          // Number of samples in a given pixel
 
     // Default constructor
     Pinhole()
@@ -31,7 +32,8 @@ public:
           position(Math::Vec3(0, -10, 2)),
           target(Math::Vec3(0, 0, 0)),
           worldUp(Math::Vec3(0, 0, 1)),
-          fov(Math::Vec3::DegToRad(35.0))
+          fov(Math::Vec3::DegToRad(35.0)),
+          samples(1)
     {
         Initialize();
     }
@@ -41,13 +43,15 @@ public:
             Math::Vec3 p,
             Math::Vec3 t,
             Math::Vec3 u,
-            double FOV)
+            double FOV,
+            int s)
         : width(w),
           height(h),
           position(p),
           target(t),
           worldUp(u),
-          fov(Math::Vec3::DegToRad(FOV))
+          fov(Math::Vec3::DegToRad(FOV)),
+          samples(s)
     {
         Initialize();
     }
@@ -60,7 +64,7 @@ public:
         double v = (j + 0.5) / height;
 
         // Map to [-1, 1]
-        double x = 2.0 * u - 1.0;
+        double x = -2.0 * u + 1.0;
         double y = 1.0 - 2.0 * v;
 
         // Coordinates of the center of the image plane
