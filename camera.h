@@ -1,116 +1,202 @@
 #pragma once
-
-#include <cmath>
-
 #include "math_objects.h"
+#include "camera_geometry.h"
+#include "optics.h"
 #include "ray.h"
 
-// Camera Parent Class
-class Camera {
+// =====================================================================================================================
+// =================================================== Back Standard ===================================================
+// =====================================================================================================================
+// The back standard holds the film. It can be shifted, risen/fallen, swung, and tilted
+// independently of the front standard to control perspective and plane of focus.
+class BackStandard {
 public:
+    double width;      // Physical width of film (meters)
+    double height;     // Physical height of film (meters)
+    double res;        // Pixels across the width
+    double rise_fall;  // Vertical shift of film center (meters)
+    double shift;      // Horizontal shift of film center (meters)
+    double swing;      // Rotation around vertical axis (radians)
+    double tilt;       // Rotation around horizontal axis (radians)
 
-    virtual ~Camera() = default;
+    BackStandard(double width,
+                 double height,
+                 double res,
+                 double rise_fall = 0.0,
+                 double shift     = 0.0,
+                 double swing_deg = 0.0,
+                 double tilt_deg  = 0.0)
+        : width(width),
+          height(height),
+          res(res),
+          rise_fall(rise_fall),
+          shift(shift),
+          swing(Math::Vec3::DegToRad(swing_deg)),
+          tilt(Math::Vec3::DegToRad(tilt_deg))
+    {}
 
-    virtual void BuildBasis() = 0;
+    // Build film frame in world space (relative to camera origin)
+    FilmFrame BuildFrame(const Math::Vec3& cam_right,
+                         const Math::Vec3& cam_up,
+                         const Math::Vec3& cam_forward,
+                         double rail_extension) const
+    {
+        FilmFrame frame;
+
+        // Film sits behind the lens at -rail_extension along the forward axis
+        frame.origin = cam_forward * (-rail_extension)
+                     + cam_right   * shift
+                     + cam_up      * rise_fall;
+
+        Math::Vec3 right  = cam_right;
+        Math::Vec3 up     = cam_up;
+        Math::Vec3 normal = cam_forward;
+
+        // Swing: rotate around the film's up axis
+        right  = Math::Vec3::RotateAroundAxis(right,  up, swing);
+        normal = Math::Vec3::RotateAroundAxis(normal, up, swing);
+
+        // Tilt: rotate around the film's right axis
+        up     = Math::Vec3::RotateAroundAxis(up,     right, tilt);
+        normal = Math::Vec3::RotateAroundAxis(normal, right, tilt);
+
+        frame.right  = right;
+        frame.up     = up;
+        frame.normal = normal;
+
+        return frame;
+    }
+
+    // Pixel dimensions derived from film aspect ratio and resolution
+    int pixelWidth()  const { return static_cast<int>(res); }
+    int pixelHeight() const { return static_cast<int>(res * height / width); }
 };
 
-// Pinhole Camera
-class Pinhole : public Camera {
+// =====================================================================================================================
+// ================================================== Front Standard ===================================================
+// =====================================================================================================================
+// The front standard holds the lens (optic). It can also be shifted, risen/fallen,
+// swung, and tilted to control focus plane and perspective independently.
+class FrontStandard {
 public:
-    int width;            // Pixel width, e.i. 1920
-    int height;           // Pixel height, e.i. 1080
-    Math::Vec3 position;  // Position of the pinhole
-    Math::Vec3 target;    // Camera target
-    Math::Vec3 worldUp;   // This is what is considered 'up' in the scene
-    double fov;           // Field of view
-    int samples;          // Number of samples in a given pixel
+    double rise_fall;
+    double shift;
+    double swing;  // radians
+    double tilt;   // radians
+    Optic* optic;  // The front standard knows about the optic, but doesn't own it.
 
-    // Default constructor
-    Pinhole()
-        : width(800),
-          height(600),
-          position(Math::Vec3(0, -10, 2)),
-          target(Math::Vec3(0, 0, 0)),
-          worldUp(Math::Vec3(0, 0, 1)),
-          fov(Math::Vec3::DegToRad(35.0)),
-          samples(1)
+    FrontStandard(Optic* optic,
+                  double rise_fall = 0.0,
+                  double shift     = 0.0,
+                  double swing_deg = 0.0,
+                  double tilt_deg  = 0.0)
+        : optic(optic),
+          rise_fall(rise_fall),
+          shift(shift),
+          swing(Math::Vec3::DegToRad(swing_deg)),
+          tilt(Math::Vec3::DegToRad(tilt_deg))
+    {}
+
+    // Build lens frame in world space (relative to camera origin)
+    LensFrame BuildFrame(const Math::Vec3& cam_right,
+                         const Math::Vec3& cam_up,
+                         const Math::Vec3& cam_forward) const
     {
-        Initialize();
-    }
+        LensFrame frame;
 
-    // Primary constructor
-    Pinhole(int w, int h,
-            Math::Vec3 p,
-            Math::Vec3 t,
-            Math::Vec3 u,
-            double FOV,
-            int s)
-        : width(w),
-          height(h),
-          position(p),
-          target(t),
-          worldUp(u),
-          fov(Math::Vec3::DegToRad(FOV)),
-          samples(s)
+        // Lens sits at the camera origin, shifted by front standard movements
+        frame.origin = cam_right * shift
+                     + cam_up    * rise_fall;
+
+        Math::Vec3 right  = cam_right;
+        Math::Vec3 up     = cam_up;
+        Math::Vec3 normal = cam_forward;
+
+        right  = Math::Vec3::RotateAroundAxis(right,  up,    swing);
+        normal = Math::Vec3::RotateAroundAxis(normal, up,    swing);
+        up     = Math::Vec3::RotateAroundAxis(up,     right, tilt);
+        normal = Math::Vec3::RotateAroundAxis(normal, right, tilt);
+
+        frame.right  = right;
+        frame.up     = up;
+        frame.normal = normal;
+
+        return frame;
+    }
+};
+
+// =====================================================================================================================
+// ================================================ Camera =============================================================
+// =====================================================================================================================
+class Camera {
+public:
+    BackStandard  back;
+    FrontStandard front;
+    double        rail_extension;  // Distance between front and back standard (meters)
+    Math::Vec3    position;
+    Math::Vec3    target;
+    Math::Vec3    worldUp;
+
+    // Derived basis vectors (built in constructor)
+    Math::Vec3 forward;
+    Math::Vec3 right;
+    Math::Vec3 up;
+
+    Camera(BackStandard  back,
+           FrontStandard front,
+           double        rail_extension,
+           Math::Vec3    position,
+           Math::Vec3    target,
+           Math::Vec3    worldUp)
+        : back(back),
+          front(front),
+          rail_extension(rail_extension),
+          position(position),
+          target(target),
+          worldUp(worldUp)
     {
-        Initialize();
-    }
-
-    // Generate rays one at a time
-    Ray GenerateRay(int i, int j)
-    {
-        // Convert pixel coordinates to normal coordinates
-        double u = (i + 0.5) / width;
-        double v = (j + 0.5) / height;
-
-        // Map to [-1, 1]
-        double x = -2.0 * u + 1.0;
-        double y = 1.0 - 2.0 * v;
-
-        // Coordinates of the center of the image plane
-        Math::Vec3 imageCenter = position - cameraForward;
-
-        // Pixel position as an offset from the image center
-        Math::Vec3 pixelPos = imageCenter +           // Image plane center
-                              x * hW * cameraRight +  // x-offset
-                              y * hH * cameraUp;      // y-offset
-
-        // Ray direction
-        Math::Vec3 rayDir = (position - pixelPos).Normalize();
-
-        return Ray(pixelPos, rayDir);
-    }
-
-
-private:
-    // Initialize the camera
-    void Initialize() {
         BuildBasis();
-
-        hH = std::tan(fov * 0.5);
-        hW = AspectRatio() * hH;
     }
 
-    // Build basis vectors for the camera
-    void BuildBasis() override {
-        // Creates an orthonormal basis for the camera
-        cameraForward = (target - position).Normalize();                       // Forward direction
-        cameraRight = Math::Vec3::Cross(cameraForward, worldUp).Normalize();   // Right-hand direction
-        cameraUp = Math::Vec3::Cross(cameraRight, cameraForward).Normalize();  // Upward direction
-    }
-
-    // Fetch the aspect
-    double AspectRatio() const
+    void BuildBasis()
     {
-        return static_cast<double>(width) / height;
+        forward = (target - position).Normalized();
+        right   = Math::Vec3::Cross(forward, worldUp).Normalized();
+        up      = Math::Vec3::Cross(right, forward).Normalized();
     }
 
-    // Store basis vectors
-    Math::Vec3 cameraForward;
-    Math::Vec3 cameraRight;
-    Math::Vec3 cameraUp;
+    // Build a full geometry snapshot. Called once per ray generation.
+    CameraGeometry BuildGeometry() const
+    {
+        CameraGeometry geo;
 
-    // Parameters for ray generation
-    double hH;  // Half the height of the sensor
-    double hW;  // Half the width of the sensor
+        geo.lens = front.BuildFrame(right, up, forward);
+        geo.film = back.BuildFrame(right, up, forward, rail_extension);
+
+        // Translate both frames into world space
+        geo.lens.origin += position;
+        geo.film.origin += position;
+
+        return geo;
+    }
+
+    // Generate a ray for pixel (px, py)
+    Ray GenerateRay(int px, int py) const
+    {
+        CameraGeometry geo = BuildGeometry();
+
+        // Map pixel coordinates to physical film position
+        double u = (px + 0.5) / back.pixelWidth();
+        double v = (py + 0.5) / back.pixelHeight();
+
+        // Center the film: u,v in [0,1] -> x,y in [-w/2, w/2]
+        double x =  (u - 0.5) * back.width;
+        double y = -(v - 0.5) * back.height;  // flip Y: pixel row 0 = top of frame
+
+        Math::Vec3 film_point = geo.film.origin
+                              + geo.film.right * x
+                              + geo.film.up    * y;
+
+        return front.optic->SampleRay(film_point, geo);
+    }
 };

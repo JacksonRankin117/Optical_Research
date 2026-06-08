@@ -225,6 +225,18 @@ namespace Math {
             }
 
             // ------------------------------------------- Vector Arithmetic -------------------------------------------
+            [[nodiscard]] constexpr static Vec3 RotateAroundAxis(const Vec3& v,
+                                                                  const Vec3& axis,
+                                                                  double angle) noexcept {
+                /// Rotates v around the given axis by angle (radians).
+                /// Uses Rodrigues' rotation formula:
+                ///   v' = v*cos(a) + (k x v)*sin(a) + k*(k.v)*(1 - cos(a))
+                Vec3 k = axis.Normalized();
+                return v        * std::cos(angle)
+                     + Cross(k, v) * std::sin(angle)
+                     + k        * Dot(k, v) * (1.0 - std::cos(angle));
+            }
+
             [[nodiscard]] constexpr friend Vec3 operator+(const Vec3& a, const Vec3& b) noexcept {
                 /// Add each component from the first vector, with each respective component in the second vector.
                 return Vec3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);

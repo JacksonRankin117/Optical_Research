@@ -1,60 +1,77 @@
 #include <vector>
 #include <memory>
 #include "camera.h"
-#include "math_objects.h"
+#include "optics.h"
 #include "scene.h"
 #include "object.h"
 #include "material.h"
 #include "spd.h"
 
 int main() {
-    // ===================================================== Scene =====================================================
-    // Materials using measured Macbeth SPDs
-    Lambertian groundMat(&SPD::Gray());        // Ideal matte grey
-    Lambertian redMat(&SPD::Red());            // Ideal matte red
-    Lambertian blueMat(&SPD::Blue());          // Ideal matte blue
-    Lambertian greenMat(&SPD::Green());        // Ideal matte green
-    Metallic   metalMat(&SPD::White(), 0.05);  // Polished silver
-    Dielectric glassMat(1.5220, 0.00459);      // Crown glass (1.5220, 0.00459)
+    // =================================================== Materials ===================================================
+    Lambertian groundMat(&SPD::Gray());
+    Lambertian redMat(&SPD::Red());
+    Lambertian blueMat(&SPD::Blue());
+    Lambertian greenMat(&SPD::Green());
+    Metallic   metalMat(&SPD::Silver(), 0.05);
+    Dielectric glassMat(1.5220, 0.00459);  // Crown glass
 
+    // ==================================================== Objects ====================================================
     std::vector<std::unique_ptr<Object>> objects;
-    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.00,  0.0,  0.5),    0.5,   &redMat));
-    objects.push_back(std::make_unique<Sphere>(Math::Vec3(-1.50,  0.0,  0.5),    0.5,   &greenMat));
-    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 1.50,  0.0,  0.5),    0.5,   &blueMat));
-    objects.push_back(std::make_unique<Sphere>(Math::Vec3(-0.75, -1.0,  0.5),    0.5,   &glassMat));
-    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.75,  1.0,  0.5),    0.5,   &metalMat));
-    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.00,  0.0, -1000.0), 1000.0, &groundMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.00,   0.0,     0.5),    0.5,   &redMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3(-1.50,   0.0,     0.5),    0.5,   &blueMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 1.50,   0.0,     0.5),    0.5,   &greenMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3(-0.75,   1.0,     0.5),    0.5,   &glassMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.75,  -1.0,     0.5),    0.5,   &metalMat));
+    objects.push_back(std::make_unique<Sphere>(Math::Vec3( 0.00,   0.0, -1000.0), 1000.0,   &groundMat));
 
     // ==================================================== Camera =====================================================
+    // Optic type
+    ThinLens optic;  // Ideal thin lens
 
+    // Optical properties
+    double focal_length = 0.240;             // 240mm focal length, typical for 8x10
+    double f_num = 5.6;                      // Stopped down for more DOF
+    int samples = 250;                       // Caustics need more samples
 
-    // Image dimensions
-    int width  = 2160;
-    int height = 1440;
+    // Set the optical properties of the optic
+    optic.SetFocalLength(focal_length);
+    optic.SetFNumber(f_num);
+    optic.Samples = samples;
 
     // Camera attributes
-    Math::Vec3     position(0, -4,  1);
-    Math::Vec3       target(0,  0,  0);
-    Math::Vec3 up_direction(0,  0,  1);
+    Math::Vec3 c_pos(0.0, 5.0, 1.5);       // Camera position
+    Math::Vec3 c_target(0.0, 0.0, 0.5);     // Aimed at the red sphere
+    Math::Vec3 c_up(0.0, 0.0, 1.0);         // Camera up
 
-    // Field-of-view
-    double fov = 40.0;
+    // Back standard object
+    BackStandard back(0.2540,  // Film/sensor width
+                      0.2032,  // Film/sensor height
+                      1600,    // Number of pixels across the width of the image.
+                      0.0,     // Rise/fall (meters)
+                      0.0,     // Shift (meters)
+                      0.0,     // Swing (deg)
+                      0.0);    // Tilt (deg)
 
-    // Number of samples per pixel (250 for quick render, 10,000+ for production-quality)
-    int samples = 4'000;
+    // Front standard object
+    FrontStandard front(&optic,  // Front standard optic
+                        0.0,     // Rise/fall (meters)
+                        0.0,     // Shift (meters)
+                        0.0,     // Swing (deg)
+                        0.0);    // Tilt (deg)
 
-    int ray_depth = 20;
+    // Calculate Rail Extension (thin lens)
+    double rail = ThinLens::CalcRailExt(focal_length, c_pos, c_target);
 
-    // Camera object construction
-    Pinhole cam(width,
-                height,
-                position,
-                target,
-                up_direction,
-                fov,
-                samples);
+    // Camera Object
+    Camera cam(back,      // Back standard
+               front,     // Front standard
+               rail,      // Distance between front and back standard
+               c_pos,     // Position of the front standard
+               c_target,  // Position of the camera target
+               c_up);     // Camera Up-direction
 
     Scene scene(cam, std::move(objects));
-    scene.Render("render.pfm", ray_depth);
+    scene.Render("render.pfm");
     return 0;
 }
