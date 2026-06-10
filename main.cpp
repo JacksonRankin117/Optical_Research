@@ -28,11 +28,12 @@ int main() {
     // ==================================================== Camera =====================================================
     // Optic type
     ThinLens optic;  // Ideal thin lens
+    Pinhole pinhole(1e-6, 250);
 
     // Optical properties
     double focal_length = 0.240;             // 240mm focal length, typical for 8x10
     double f_num = 5.6;                      // Stopped down for more DOF
-    int samples = 250;                       // Caustics need more samples
+    int samples = 1'000;                       // Caustics need more samples
 
     // Set the optical properties of the optic
     optic.SetFocalLength(focal_length);
@@ -57,7 +58,7 @@ int main() {
     FrontStandard front(&optic,  // Front standard optic
                         0.0,     // Rise/fall (meters)
                         0.0,     // Shift (meters)
-                        0.0,     // Swing (deg)
+                       35.0,     // Swing (deg)
                         0.0);    // Tilt (deg)
 
     // Calculate Rail Extension (thin lens)
